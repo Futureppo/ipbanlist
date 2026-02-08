@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  ipban:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ipban
+    environment:
+      - PORT=8080
+      - DB_PATH=/app/data/ipban.db
+      - ADMIN_PASS=admin
+      - GIN_MODE=release
+    ports:
+      - "8080:8080"
+    volumes:
+      - ipban_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  ipban_data:

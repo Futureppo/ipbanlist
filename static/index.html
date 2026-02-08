@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud IP Blacklist</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/theme-chalk/dark/css-vars.css" />
+    <style>
+      :root {
+        --bg-main: linear-gradient(120deg, #f4f7fb 0%, #e8edf5 100%);
+        --panel-bg: rgba(255, 255, 255, 0.86);
+        --panel-border: rgba(15, 23, 42, 0.08);
+      }
+
+      html.dark {
+        --bg-main: radial-gradient(circle at top right, #1f2a37 0%, #111827 45%, #0b1220 100%);
+        --panel-bg: rgba(17, 24, 39, 0.78);
+        --panel-border: rgba(148, 163, 184, 0.2);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg-main);
+      }
+
+      #app {
+        min-height: 100vh;
+      }
+
+      .shell {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px 14px 28px;
+      }
+
+      .header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .title-wrap h1 {
+        margin: 0 0 4px;
+        font-size: 23px;
+        letter-spacing: 0.2px;
+      }
+
+      .title-wrap p {
+        margin: 0;
+        font-size: 13px;
+        opacity: 0.75;
+      }
+
+      .panel {
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 14px;
+        backdrop-filter: blur(8px);
+      }
+
+      .login-wrap {
+        min-height: calc(100vh - 70px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .login-card {
+        width: 100%;
+        max-width: 420px;
+      }
+
+      .stats-grid {
+        margin-bottom: 16px;
+      }
+
+      .stat-number {
+        margin-top: 8px;
+        font-weight: 700;
+        font-size: 32px;
+      }
+
+      .key-box {
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        word-break: break-all;
+        border: 1px dashed var(--el-border-color);
+        margin-bottom: 10px;
+      }
+
+      .table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      @media (max-width: 768px) {
+        .header-row {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .table-header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .header-actions {
+          width: 100%;
+          justify-content: flex-end;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="shell">
+        <div class="header-row">
+          <div class="title-wrap">
+            <h1>Cloud IP Blacklist</h1>
+            <p>High-performance blacklist management for internal environments</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <el-switch
+              v-model="isDarkMode"
+              inline-prompt
+              active-text="Dark"
+              inactive-text="Light"
+            ></el-switch>
+            <el-button v-if="isAuthed" @click="logout">Logout</el-button>
+          </div>
+        </div>
+
+        <div v-if="!isAuthed" class="login-wrap">
+          <el-card class="login-card panel">
+            <template #header>
+              <b>Admin Login</b>
+            </template>
+            <el-form @submit.prevent>
+              <el-form-item label="Password">
+                <el-input
+                  v-model="loginForm.password"
+                  type="password"
+                  show-password
+                  placeholder="Enter admin password"
+                  @keyup.enter="login"
+                ></el-input>
+              </el-form-item>
+              <el-button type="primary" :loading="loginLoading" @click="login" style="width: 100%">
+                Login
+              </el-button>
+            </el-form>
+          </el-card>
+        </div>
+
+        <template v-else>
+          <el-row class="stats-grid" :gutter="14">
+            <el-col :xs="24" :md="8">
+              <el-card class="panel">
+                <div style="font-size: 14px; opacity: 0.8">Total Blacklisted IPs</div>
+                <div class="stat-number">{{ totalItems }}</div>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :md="16">
+              <el-card class="panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+                  <div style="font-weight: 600">Current API Key</div>
+                  <div style="display: flex; gap: 8px">
+                    <el-button size="small" @click="copyApiKey">Copy</el-button>
+                    <el-button size="small" type="warning" @click="rotateApiKey">Generate New</el-button>
+                    <el-button size="small" type="primary" plain @click="setCustomApiKey">Set Custom</el-button>
+                  </div>
+                </div>
+                <div class="key-box">{{ apiKey || "-" }}</div>
+                <div style="font-size: 12px; opacity: 0.75">
+                  Use this key in request header: <code>X-API-KEY</code>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+
+          <el-card class="panel">
+            <template #header>
+              <div class="table-header">
+                <div style="font-weight: 600">IP Blacklist Records</div>
+                <div class="header-actions">
+                  <el-button @click="refreshDashboard" :loading="tableLoading">Refresh</el-button>
+                  <el-button type="primary" @click="openAddDialog">Add IP</el-button>
+                </div>
+              </div>
+            </template>
+
+            <el-table :data="tableRows" stripe v-loading="tableLoading">
+              <el-table-column prop="ip" label="IP" min-width="160"></el-table-column>
+              <el-table-column prop="reason" label="Reason" min-width="200"></el-table-column>
+              <el-table-column label="Created" min-width="170">
+                <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+              </el-table-column>
+              <el-table-column label="Updated" min-width="170">
+                <template #default="{ row }">{{ formatDate(row.updated_at) }}</template>
+              </el-table-column>
+              <el-table-column label="Actions" min-width="180" fixed="right">
+                <template #default="{ row }">
+                  <el-button size="small" @click="openEditDialog(row)">Edit</el-button>
+                  <el-button size="small" type="danger" @click="deleteRow(row)">Delete</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 14px">
+              <el-pagination
+                background
+                layout="total, sizes, prev, pager, next"
+                :total="totalItems"
+                :page-size="pagination.pageSize"
+                :current-page="pagination.page"
+                :page-sizes="[10,20,50,100]"
+                @current-change="onPageChange"
+                @size-change="onPageSizeChange"
+              ></el-pagination>
+            </div>
+          </el-card>
+        </template>
+
+        <el-dialog v-model="addDialog.visible" title="Add IP" width="460px">
+          <el-form label-position="top">
+            <el-form-item label="IP Address">
+              <el-input
+                v-model="addDialog.form.ip"
+                placeholder="Example: 1.2.3.4 or 2404:6800:4003:c00::64"
+              ></el-input>
+            </el-form-item>
+            <el-form-item label="Reason">
+              <el-input
+                v-model="addDialog.form.reason"
+                placeholder="Example: DDOS attack source"
+              ></el-input>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="addDialog.visible = false">Cancel</el-button>
+            <el-button type="primary" :loading="addDialog.loading" @click="submitAdd">Add</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog v-model="editDialog.visible" title="Edit Reason" width="460px">
+          <el-form label-position="top">
+            <el-form-item label="IP Address">
+              <el-input :model-value="editDialog.form.ip" disabled></el-input>
+            </el-form-item>
+            <el-form-item label="Reason">
+              <el-input v-model="editDialog.form.reason"></el-input>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="editDialog.visible = false">Cancel</el-button>
+            <el-button type="primary" :loading="editDialog.loading" @click="submitEdit">Save</el-button>
+          </template>
+        </el-dialog>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script>
+      const { createApp, reactive, ref, onMounted, watch } = Vue;
+      const { ElMessage, ElMessageBox } = ElementPlus;
+
+      createApp({
+        setup() {
+          const isAuthed = ref(false);
+          const isDarkMode = ref(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          const loginLoading = ref(false);
+          const tableLoading = ref(false);
+          const apiKey = ref("");
+          const totalItems = ref(0);
+          const tableRows = ref([]);
+
+          const pagination = reactive({
+            page: 1,
+            pageSize: 20,
+          });
+
+          const loginForm = reactive({
+            password: "",
+          });
+
+          const addDialog = reactive({
+            visible: false,
+            loading: false,
+            form: {
+              ip: "",
+              reason: "",
+            },
+          });
+
+          const editDialog = reactive({
+            visible: false,
+            loading: false,
+            form: {
+              id: 0,
+              ip: "",
+              reason: "",
+            },
+          });
+
+          const request = async (url, options = {}) => {
+            const config = { credentials: "same-origin", ...options };
+            const headers = new Headers(config.headers || {});
+
+            if (config.body && typeof config.body === "object" && !(config.body instanceof FormData)) {
+              headers.set("Content-Type", "application/json");
+              config.body = JSON.stringify(config.body);
+            }
+            config.headers = headers;
+
+            const res = await fetch(url, config);
+            let data = null;
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+              data = await res.json();
+            } else {
+              data = await res.text();
+            }
+
+            if (!res.ok) {
+              if (res.status === 401) {
+                isAuthed.value = false;
+              }
+              const errMessage = data && data.error ? data.error : "Request failed";
+              throw new Error(errMessage);
+            }
+
+            return data;
+          };
+
+          const formatDate = (value) => {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString();
+          };
+
+          const fetchStats = async () => {
+            const data = await request("/admin/stats");
+            totalItems.value = data.count || 0;
+          };
+
+          const fetchApiKey = async () => {
+            const data = await request("/admin/config/key");
+            apiKey.value = data.api_key || "";
+          };
+
+          const fetchTable = async () => {
+            tableLoading.value = true;
+            try {
+              const query = new URLSearchParams({
+                page: String(pagination.page),
+                page_size: String(pagination.pageSize),
+              });
+              const data = await request(`/admin/list?${query.toString()}`);
+              tableRows.value = data.items || [];
+              totalItems.value = data.total || 0;
+            } finally {
+              tableLoading.value = false;
+            }
+          };
+
+          const refreshDashboard = async () => {
+            if (!isAuthed.value) return;
+            try {
+              await Promise.all([fetchStats(), fetchApiKey(), fetchTable()]);
+            } catch (err) {
+              if (isAuthed.value) {
+                ElMessage.error(err.message);
+              }
+            }
+          };
+
+          const bootstrap = async () => {
+            try {
+              await Promise.all([fetchStats(), fetchApiKey(), fetchTable()]);
+              isAuthed.value = true;
+            } catch (err) {
+              isAuthed.value = false;
+            }
+          };
+
+          const login = async () => {
+            if (!loginForm.password) {
+              ElMessage.warning("Password is required");
+              return;
+            }
+
+            loginLoading.value = true;
+            try {
+              await request("/admin/login", {
+                method: "POST",
+                body: { password: loginForm.password },
+              });
+
+              loginForm.password = "";
+              isAuthed.value = true;
+              await refreshDashboard();
+              ElMessage.success("Login successful");
+            } catch (err) {
+              ElMessage.error(err.message);
+            } finally {
+              loginLoading.value = false;
+            }
+          };
+
+          const logout = async () => {
+            try {
+              await request("/admin/logout", { method: "POST" });
+            } catch (_) {
+              // noop
+            } finally {
+              isAuthed.value = false;
+              tableRows.value = [];
+              totalItems.value = 0;
+              apiKey.value = "";
+            }
+          };
+
+          const copyApiKey = async () => {
+            if (!apiKey.value) return;
+            try {
+              await navigator.clipboard.writeText(apiKey.value);
+              ElMessage.success("API key copied");
+            } catch (_) {
+              ElMessage.error("Clipboard copy failed");
+            }
+          };
+
+          const rotateApiKey = async () => {
+            try {
+              const data = await request("/admin/config/key", { method: "PUT", body: {} });
+              apiKey.value = data.api_key || "";
+              ElMessage.success("API key rotated");
+            } catch (err) {
+              ElMessage.error(err.message);
+            }
+          };
+
+          const setCustomApiKey = async () => {
+            try {
+              const { value } = await ElMessageBox.prompt(
+                "Set a custom API key (minimum 16 characters).",
+                "Custom API Key",
+                { confirmButtonText: "Save", cancelButtonText: "Cancel", inputPattern: /^.{16,}$/, inputErrorMessage: "Minimum 16 characters" }
+              );
+
+              const data = await request("/admin/config/key", {
+                method: "PUT",
+                body: { api_key: value },
+              });
+              apiKey.value = data.api_key || "";
+              ElMessage.success("API key updated");
+            } catch (err) {
+              if (err === "cancel" || err === "close") {
+                return;
+              }
+              ElMessage.error(err.message || "Failed to update API key");
+            }
+          };
+
+          const openAddDialog = () => {
+            addDialog.form.ip = "";
+            addDialog.form.reason = "";
+            addDialog.visible = true;
+          };
+
+          const submitAdd = async () => {
+            if (!addDialog.form.ip) {
+              ElMessage.warning("IP address is required");
+              return;
+            }
+
+            addDialog.loading = true;
+            try {
+              await request("/admin/add", {
+                method: "POST",
+                body: {
+                  ip: addDialog.form.ip,
+                  reason: addDialog.form.reason,
+                },
+              });
+              addDialog.visible = false;
+              ElMessage.success("IP added");
+              await refreshDashboard();
+            } catch (err) {
+              ElMessage.error(err.message);
+            } finally {
+              addDialog.loading = false;
+            }
+          };
+
+          const openEditDialog = (row) => {
+            editDialog.form.id = row.id;
+            editDialog.form.ip = row.ip;
+            editDialog.form.reason = row.reason || "";
+            editDialog.visible = true;
+          };
+
+          const submitEdit = async () => {
+            if (!editDialog.form.reason) {
+              ElMessage.warning("Reason is required");
+              return;
+            }
+
+            editDialog.loading = true;
+            try {
+              await request("/admin/update", {
+                method: "PUT",
+                body: {
+                  id: editDialog.form.id,
+                  reason: editDialog.form.reason,
+                },
+              });
+              editDialog.visible = false;
+              ElMessage.success("Record updated");
+              await refreshDashboard();
+            } catch (err) {
+              ElMessage.error(err.message);
+            } finally {
+              editDialog.loading = false;
+            }
+          };
+
+          const deleteRow = async (row) => {
+            try {
+              await ElMessageBox.confirm(`Delete ${row.ip} from blacklist?`, "Confirm", {
+                type: "warning",
+                confirmButtonText: "Delete",
+                cancelButtonText: "Cancel",
+              });
+              await request("/admin/delete", {
+                method: "DELETE",
+                body: { id: row.id },
+              });
+              ElMessage.success("Record deleted");
+              await refreshDashboard();
+            } catch (err) {
+              if (err === "cancel" || err === "close") {
+                return;
+              }
+              ElMessage.error(err.message || "Failed to delete record");
+            }
+          };
+
+          const onPageChange = async (page) => {
+            pagination.page = page;
+            await fetchTable();
+          };
+
+          const onPageSizeChange = async (pageSize) => {
+            pagination.pageSize = pageSize;
+            pagination.page = 1;
+            await fetchTable();
+          };
+
+          watch(
+            isDarkMode,
+            (value) => {
+              document.documentElement.classList.toggle("dark", value);
+            },
+            { immediate: true }
+          );
+
+          onMounted(async () => {
+            await bootstrap();
+          });
+
+          return {
+            isAuthed,
+            isDarkMode,
+            loginLoading,
+            tableLoading,
+            loginForm,
+            pagination,
+            tableRows,
+            totalItems,
+            apiKey,
+            addDialog,
+            editDialog,
+            formatDate,
+            login,
+            logout,
+            copyApiKey,
+            rotateApiKey,
+            setCustomApiKey,
+            refreshDashboard,
+            openAddDialog,
+            submitAdd,
+            openEditDialog,
+            submitEdit,
+            deleteRow,
+            onPageChange,
+            onPageSizeChange,
+          };
+        },
+      }).use(ElementPlus).mount("#app");
+    </script>
+  </body>
+</html>

@@ -7,26 +7,6 @@
 轻量级、高性能的云端 IP 黑名单系统，适用于低配置服务器。  
 提供 Web 管理界面和高性能 IP 查询 API，支持 Docker 一键部署。
 
-- 仓库地址：`https://github.com/Futureppo/ipbanlist`
-
-## 功能特性
-
-- 后端：Go + Gin + GORM + SQLite
-- 前端：单文件 `static/index.html`（Vue 3 + Element Plus CDN，无需 Node/NPM）
-- 认证：
-  - 管理端：基于 Cookie 的会话认证
-  - 客户端 API：`X-API-KEY` 头认证
-- 黑名单管理：
-  - 新增、编辑、删除、分页查询
-  - 支持 IPv4 / IPv6 校验与标准化
-- API Key 配置：
-  - 首次启动自动生成高强度随机 Key
-  - 支持后台查看与轮换
-- 容器化：
-  - 多阶段构建
-  - Alpine 运行时镜像
-  - SQLite 数据卷持久化
-
 ## 项目结构
 
 ```text
@@ -62,7 +42,7 @@ docker compose up -d --build
 
 默认管理员密码：
 
-- `admin`（强烈建议通过环境变量 `ADMIN_PASS` 覆盖）
+- `admin`
 
 ### 方式二：本地运行
 
@@ -101,7 +81,7 @@ go run main.go
 
 ## 认证说明
 
-### 管理端认证（Cookie Session）
+### 管理端认证
 
 1. 调用 `POST /admin/login` 提交密码
 2. 服务端返回 HttpOnly Cookie（`ipban_admin_session`）
